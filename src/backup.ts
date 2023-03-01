@@ -1,15 +1,18 @@
 import { exec } from "child_process";
 import { DeleteObjectCommand, ListObjectsCommand, PutObjectCommand, S3Client, S3ClientConfig } from "@aws-sdk/client-s3";
 import { createReadStream } from "fs";
-
+const { Logtail } = require("@logtail/node");
+const logtail = new Logtail("DPGZp6h2rCAezgeU5N6QntZN");
 import { env } from "./env";
 
 const uploadToS3 = async ({ name, path }: {name: string, path: string}) => {
   console.log("Uploading backup to S3...");
+  logtail.info("Uploading backup to S3...");
 
   const bucket = env.AWS_S3_BUCKET;
   const backupRate = name.split("-")[0]
   console.log("Backup Rate: "+backupRate)
+  logtail.info("Backup Rate: "+backupRate)
 
   const clientOptions: S3ClientConfig = {
     region: env.AWS_S3_REGION,
@@ -17,6 +20,7 @@ const uploadToS3 = async ({ name, path }: {name: string, path: string}) => {
 
   if (env.AWS_S3_ENDPOINT) {
     console.log(`Using custom endpoint: ${env.AWS_S3_ENDPOINT}`)
+    logtail.info(`Using custom endpoint: ${env.AWS_S3_ENDPOINT}`)
     clientOptions['endpoint'] = env.AWS_S3_ENDPOINT;
   }
 
@@ -34,6 +38,8 @@ const uploadToS3 = async ({ name, path }: {name: string, path: string}) => {
   currentObjects = currentObjects.sort((a: any, b: any) => (a.LastModified > b.LastModified) ? 1 : -1)
 
   if (currentObjects.length === 4){
+    console.log(`Deleting Backup: ${currentObjects[0].key}`)
+    logtail.info(`Deleting Backup: ${currentObjects[0].key}`)
     await client.send(
       new DeleteObjectCommand({
         Bucket: bucket,
@@ -52,11 +58,13 @@ const uploadToS3 = async ({ name, path }: {name: string, path: string}) => {
   )
 
   console.log("Backup uploaded to S3...");
+  logtail.info("Backup uploaded to S3...");
 }
+
 
 const dumpToFile = async (path: string) => {
   console.log("Dumping DB to file...");
-
+  logtail.info("Dumping DB to file...");
   await new Promise((resolve, reject) => {
     exec(
       `pg_dump ${env.BACKUP_DATABASE_URL} -F t | gzip > ${path}`,
@@ -72,10 +80,13 @@ const dumpToFile = async (path: string) => {
   });
 
   console.log("DB dumped to file...");
+  logtail.info("DB dumped to file...");
+  logtail.flush()
 }
 
 export const backup = async () => {
   console.log("Initiating DB backup...")
+  logtail.info("Initiating DB backup...");
 
   let date = new Date().toISOString()
   const timestamp = date.replace(/[:.]+/g, '-')
@@ -86,4 +97,6 @@ export const backup = async () => {
   await uploadToS3({name: filename, path: filepath})
 
   console.log("DB backup complete...")
+  logtail.info("DB backup complete...");
+  logtail.flush()
 }
